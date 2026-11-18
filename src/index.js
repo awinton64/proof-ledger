@@ -58,10 +58,12 @@ export async function dailySweep() {
 
 // Rovo actions and MCP tools. Same deterministic engine as the UI.
 export async function checkProofAction(payload) {
+  console.log(`check-proof action: ${payload.customer} / ${payload.assetType} / ${payload.channel}`);
   return svc.checkProof({ customer: payload.customer, assetType: payload.assetType, channel: payload.channel, quoteText: payload.quoteText });
 }
 
 export async function listReferenceableAction(payload) {
+  console.log(`list-referenceable action: ${payload.assetType} / ${payload.channel} / ${payload.segment || 'any'}`);
   return svc.listReferenceable({ assetType: payload.assetType, channel: payload.channel, segment: payload.segment });
 }
 

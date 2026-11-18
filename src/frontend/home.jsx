@@ -40,8 +40,8 @@ const Dashboard = ({ version, onChanged }) => {
   if (!d) return <Spinner />;
   const t = d.totals;
   const health = [
-    { status: 'Flagged pages', count: t.pagesFlagged },
-    { status: 'Clear pages', count: Math.max(0, t.pagesScanned - t.pagesFlagged) },
+    { status: 'Clear or warning only', count: Math.max(0, t.pagesScanned - t.pagesFlagged) },
+    { status: 'Flagged', count: t.pagesFlagged },
   ];
   return (
     <Stack space="space.300">
