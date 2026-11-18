@@ -3,7 +3,7 @@ import ForgeReconciler, {
   Stack, Inline, Box, Text, Strong, Heading, Button, Select, Label, Textfield, TextArea, DatePicker, Checkbox,
   DynamicTable, SectionMessage, Spinner, Tabs, TabList, Tab, TabPanel, Lozenge, DonutChart, Link, List, ListItem, Toggle, xcss,
 } from '@forge/react';
-import { call, Verdict } from './common';
+import { call, runJob, Verdict } from './common';
 
 const card = xcss({ padding: 'space.200', borderColor: 'color.border', borderWidth: 'border.width', borderStyle: 'solid', borderRadius: 'border.radius' });
 const STATE = { active: 'success', expired: 'removed', revoked: 'removed', not_started: 'default' };
@@ -30,9 +30,9 @@ const Dashboard = ({ version, onChanged }) => {
   const run = (name, label) => {
     setBusy(label);
     setError(null);
-    call(name).then((r) => {
+    runJob(name).then((r) => {
       if (name === 'sweep') setMsg(`Sweep checked ${r.pagesChecked} page(s) for ${r.affected.length} affected customer(s): ${r.created.length} new fix task(s)${r.created.length ? ` (${r.created.map((c) => c.key).join(', ')})` : ''}, ${r.existing.length} already open.`);
-      else setMsg(`Scanned ${r.length} page(s) that name a ledger customer.`);
+      else setMsg(`Scanned ${r.pages} page(s) that name a ledger customer.`);
       return load();
     }).catch((e) => setError(e.message)).finally(() => { setBusy(''); onChanged && onChanged(); });
   };
@@ -126,7 +126,10 @@ const Ledger = ({ version, onChanged }) => {
   const act = (name, payload, after) => {
     setBusy(true);
     setError(null);
-    call(name, payload).then((r) => {
+    const p = name === 'setCustomerStatus' && payload.status === 'churned'
+      ? runJob('churn', payload).then(async (sweep) => ({ view: await call('ledger'), sweep }))
+      : call(name, payload);
+    p.then((r) => {
       if (r.view) { setV(r.view); if (r.sweep) setNote(`Marked churned. Sweep raised ${r.sweep.created.length} fix task(s)${r.sweep.created.length ? `: ${r.sweep.created.map((c) => `${c.key} (${c.page})`).join(', ')}` : ''}.`); }
       else setV(r);
       after && after();

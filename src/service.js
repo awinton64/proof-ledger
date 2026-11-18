@@ -130,11 +130,11 @@ export async function getDashboard() {
 // Affected = churned customers, plus customers with a permission that expired or was revoked.
 // For each, find pages that still name them in a channel that now fails, and raise one Jira task
 // per page and customer (deduplicated with a label), plus a comment on open proof requests.
-export async function sweep({ reason = 'manual' } = {}) {
+export async function sweep({ reason = 'manual', onlyCustomerId = null } = {}) {
   const settings = await getSettings();
   const ledger = await atl.loadLedger();
   const t = today();
-  const affected = ledger.customers.filter((c) => c.status === 'churned'
+  const affected = ledger.customers.filter((c) => (!onlyCustomerId || c.id === String(onlyCustomerId))).filter((c) => c.status === 'churned'
     || ledger.permissions.some((p) => p.customerId === c.id && ['expired', 'revoked'].includes(permissionState(p, t))));
   const created = [];
   const existing = [];
@@ -249,7 +249,7 @@ export async function deletePermission({ customerId, id }) {
 
 export async function setCustomerStatus({ customerId, status, runSweep = true }) {
   await atl.updateLedgerRecord(customerId, (r) => ({ ...r, status, churnedAt: status === 'churned' ? today() : null }));
-  const sweepResult = status === 'churned' && runSweep ? await sweep({ reason: 'customer marked churned' }) : null;
+  const sweepResult = status === 'churned' && runSweep ? await sweep({ reason: 'customer marked churned', onlyCustomerId: customerId }) : null;
   return { view: await getLedgerView(), sweep: sweepResult };
 }
 

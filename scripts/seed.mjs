@@ -149,7 +149,15 @@ const REQUESTS = [
 
 // ---------- run ----------
 
+async function resetDemo() {
+  // Remove fix tasks raised by earlier demo runs so the churn story starts clean.
+  const old = await req('GET', `/rest/api/3/search/jql?jql=${encodeURIComponent(`project = ${TASK_PROJECT} AND labels = proof-fix`)}&fields=summary&maxResults=100`);
+  for (const i of old.issues || []) await req('DELETE', `/rest/api/3/issue/${i.key}`);
+  if ((old.issues || []).length) console.log(`removed ${old.issues.length} old fix task(s)`);
+}
+
 async function main() {
+  if (process.argv.includes('--reset')) await resetDemo();
   const desks = await req('GET', '/rest/servicedeskapi/servicedesk');
   const desk = desks.values.find((d) => d.projectKey === JSM_PROJECT);
   if (!desk) throw new Error(`No service desk ${JSM_PROJECT}`);

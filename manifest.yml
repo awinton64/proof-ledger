@@ -39,6 +39,10 @@ modules:
       events:
         - avi:confluence:created:page
         - avi:confluence:updated:page
+  consumer:
+    - key: proof-job-consumer
+      queue: proof-jobs
+      function: jobFn
   scheduledTrigger:
     - key: daily-sweep
       function: sweepFn
@@ -142,6 +146,10 @@ modules:
       handler: index.onPageEvent
     - key: sweepFn
       handler: index.dailySweep
+      timeoutSeconds: 900
+    - key: jobFn
+      handler: index.runJob
+      timeoutSeconds: 900
     - key: checkProofFn
       handler: index.checkProofAction
     - key: listReferenceableFn
@@ -164,6 +172,7 @@ permissions:
     - search:confluence
     - read:space:confluence
     - read:page:confluence
+    - write:page:confluence
     - read:label:confluence
     - write:jira-work
     - read:servicedesk-request

@@ -1,3 +1,5 @@
+import { Queue } from '@forge/events';
+import { kvs } from '@forge/kvs';
 import Resolver from '@forge/resolver';
 import * as svc from './service';
 
@@ -31,7 +33,6 @@ resolver.define('logUse', wrap(({ context }) => svc.logUse(context.extension.iss
 // Confluence byline
 resolver.define('scanPage', wrap(({ context }) => svc.scanById(String(context.extension.content.id))));
 
-export const handler = resolver.getDefinitions();
 
 // Confluence page published or updated: re-check it and store the result as a content property.
 export async function onPageEvent(event) {
@@ -68,3 +69,34 @@ export async function scanPageAction(payload) {
   const r = await svc.scanById(String(payload.pageId), { persist: false });
   return { page: r.title, url: r.url, channel: r.channel, status: r.status, summary: r.summary, findings: r.findings };
 }
+
+// ---------- long-running jobs (scan all pages, sweep) run on an async queue ----------
+
+const jobs = new Queue({ key: 'proof-jobs' });
+
+async function startJob(kind, args = {}) {
+  const id = `job-${Date.now().toString(36)}`;
+  await kvs.set(`job:${id}`, { id, kind, state: 'running', startedAt: new Date().toISOString() });
+  await jobs.push({ body: { id, kind, args } });
+  return { id };
+}
+
+resolver.define('startJob', wrap(({ payload }) => startJob(payload.kind, payload.args || {})));
+resolver.define('getJob', wrap(async ({ payload }) => (await kvs.get(`job:${payload.id}`)) || { state: 'unknown' }));
+
+export async function runJob(event) {
+  const { id, kind, args } = event.body || event.payload || {};
+  try {
+    let result;
+    if (kind === 'scanAll') result = { pages: (await svc.scanAll()).length };
+    else if (kind === 'sweep') result = await svc.sweep({ reason: args.reason || 'manual' });
+    else if (kind === 'churn') result = await svc.setCustomerStatus({ customerId: args.customerId, status: args.status, runSweep: true }).then((r) => r.sweep);
+    else throw new Error(`Unknown job ${kind}`);
+    await kvs.set(`job:${id}`, { id, kind, state: 'done', finishedAt: new Date().toISOString(), result });
+  } catch (e) {
+    console.error(`job ${id} failed: ${e.message}`);
+    await kvs.set(`job:${id}`, { id, kind, state: 'failed', error: String(e.message || e) });
+  }
+}
+
+export const handler = resolver.getDefinitions();

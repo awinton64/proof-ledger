@@ -16,3 +16,16 @@ export const Verdict = ({ value, bold = true }) => (
 );
 
 export const verdictLabel = (v) => LABEL[v] || v;
+
+// Start a queued job and poll until it finishes (scans and sweeps can outlast a 25 s resolver).
+export async function runJob(kind, args = {}, { intervalMs = 2500, maxMs = 300000 } = {}) {
+  const { id } = await call('startJob', { kind, args });
+  const t0 = Date.now();
+  while (Date.now() - t0 < maxMs) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const j = await call('getJob', { id });
+    if (j.state === 'done') return j.result;
+    if (j.state === 'failed') throw new Error(j.error || 'Job failed');
+  }
+  throw new Error('Still running. Refresh in a minute to see the result.');
+}
