@@ -1,0 +1,18 @@
+{
+  "name": "proof-ledger",
+  "version": "0.1.0",
+  "description": "Know which customers you may name, where, and until when. A Forge app for Jira, Jira Service Management and Confluence.",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@forge/api": "^8.5.0",
+    "@forge/bridge": "7.3.0-next.12",
+    "@forge/kvs": "^1.0.0",
+    "@forge/react": "12.5.0-next.2",
+    "@forge/resolver": "2.0.2",
+    "react": "^18.2.0"
+  }
+}

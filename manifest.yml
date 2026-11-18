@@ -1,0 +1,176 @@
+modules:
+  jira:globalPage:
+    - key: proof-ledger-home
+      resource: home
+      resolver:
+        function: resolver
+      render: native
+      title: Proof Ledger
+  jira:issuePanel:
+    - key: proof-request-panel
+      resource: panel
+      resolver:
+        function: resolver
+      render: native
+      title: Proof request
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  jira:entityProperty:
+    - key: proof-request-index
+      entityType: issue
+      propertyKey: proof-request
+      values:
+        - path: customerId
+          type: string
+          searchAlias: proofCustomer
+        - path: assetType
+          type: string
+          searchAlias: proofUse
+  confluence:contentBylineItem:
+    - key: proof-ledger-byline
+      resource: byline
+      resolver:
+        function: resolver
+      render: native
+      title: Proof check
+      tooltip: Check customer names and quotes on this page against the Proof Ledger
+  trigger:
+    - key: page-changed
+      function: pageEvent
+      events:
+        - avi:confluence:created:page
+        - avi:confluence:updated:page
+  scheduledTrigger:
+    - key: daily-sweep
+      function: sweepFn
+      interval: day
+  rovo:agent:
+    - key: proof-desk
+      name: Proof Desk
+      description: Answers whether marketing and sales may name a customer, quote them or ask them for a reference, using consent recorded in Proof Ledger.
+      prompt: >
+        You are Proof Desk, an assistant for marketing, sales and legal teams. You answer one question:
+        may we name, quote or ask this customer, in this channel, today? Always call the check-proof action
+        before answering about a specific customer and asset, and call list-referenceable when asked which
+        customers can be used. Report the verdict (Allowed, Needs consent or Blocked) and the reasons exactly
+        as the action returns them. Never invent consent, quotes, customers or dates. If a quote is approved,
+        give the approved wording verbatim. If the verdict is Needs consent, suggest recording a proof request
+        in Jira. Asset types: logo, quote, case_study, reference_call, outcome_claim. Channels: website, paid_ads,
+        social, sales_deck, case_study, press, events, partner, sales_call.
+      conversationStarters:
+        - Which customers can sales name on a call this month?
+        - Can we use Brindlewood Freight's quote in a paid ad?
+        - Check this Confluence page for customer proof problems
+      actions:
+        - check-proof
+        - list-referenceable
+        - scan-page
+  rovo:mcp:
+    - key: proof-ledger-mcp
+      name: Proof Ledger
+      tools:
+        - check-proof
+        - list-referenceable
+        - scan-page
+  action:
+    - key: check-proof
+      name: Check customer proof permission
+      function: checkProofFn
+      actionVerb: GET
+      description: >
+        Decides whether a customer may be named or quoted (logo, quote, case study, reference call or outcome claim) in a channel today. Returns ALLOWED, NEEDS_CONSENT or BLOCKED with reasons. Call before writing copy that names a customer.
+      inputs:
+        customer:
+          title: Customer
+          type: string
+          required: true
+          description: Customer organization name, for example Brindlewood Freight
+        assetType:
+          title: Use
+          type: string
+          required: true
+          description: One of logo, quote, case_study, reference_call, outcome_claim
+        channel:
+          title: Channel
+          type: string
+          required: true
+          description: One of website, paid_ads, social, sales_deck, case_study, press, events, partner, sales_call
+        quoteText:
+          title: Wording
+          type: string
+          required: false
+          description: Exact quote or claim text to check against the approved wording
+    - key: list-referenceable
+      name: List customers allowed for a use
+      function: listReferenceableFn
+      actionVerb: GET
+      description: >
+        Lists the customers that may be used for an asset type in a channel today, optionally filtered by
+        segment (industry). Use it to answer "which customers can we name".
+      inputs:
+        assetType:
+          title: Use
+          type: string
+          required: true
+          description: One of logo, quote, case_study, reference_call, outcome_claim
+        channel:
+          title: Channel
+          type: string
+          required: true
+          description: One of website, paid_ads, social, sales_deck, case_study, press, events, partner, sales_call
+        segment:
+          title: Segment
+          type: string
+          required: false
+          description: Optional customer segment, for example Healthcare or Logistics
+    - key: scan-page
+      name: Scan a Confluence page for customer proof problems
+      function: scanPageFn
+      actionVerb: GET
+      description: >
+        Checks every customer name and quote on a Confluence page against Proof Ledger for the page's channel
+        label and returns each unconsented, expired or wrong-channel use with a fix.
+      inputs:
+        pageId:
+          title: Page ID
+          type: string
+          required: true
+          description: Numeric Confluence page ID
+  function:
+    - key: resolver
+      handler: index.handler
+    - key: pageEvent
+      handler: index.onPageEvent
+    - key: sweepFn
+      handler: index.dailySweep
+    - key: checkProofFn
+      handler: index.checkProofAction
+    - key: listReferenceableFn
+      handler: index.listReferenceableAction
+    - key: scanPageFn
+      handler: index.scanPageAction
+resources:
+  - key: home
+    path: src/frontend/home.jsx
+  - key: panel
+    path: src/frontend/panel.jsx
+  - key: byline
+    path: src/frontend/byline.jsx
+permissions:
+  scopes:
+    - storage:app
+    - read:jira-work
+    - read:confluence-content.all
+    - read:confluence-content.summary
+    - search:confluence
+    - read:space:confluence
+    - read:page:confluence
+    - read:label:confluence
+    - write:jira-work
+    - read:servicedesk-request
+    - manage:servicedesk-customer
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/2f21141a-9f8b-46c1-83ff-56074a06c1d6
