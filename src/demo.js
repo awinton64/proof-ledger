@@ -3,7 +3,7 @@
 // code runs inside Forge (as the app), from Node with an API token, and in tests against a fake site.
 //
 // Safety rules (tested in test/demo.test.js):
-// - Only invented companies and pages are created. "Corvane Analytics" is the fictional vendor.
+// - Only invented companies and pages are created. "Tamberlit Analytics" is the fictional vendor.
 // - A record is touched only if it is demo data: an organization whose ledger record carries
 //   `demo: true` (or, for sites seeded before the flag existed, a fictional name whose permissions
 //   all have seed ids), a Confluence page with the demo label or demo banner, a Jira issue with the
@@ -21,7 +21,7 @@ export const DEMO_CUSTOMERS = [
   { name: 'Orrinvale Credit Union', aliases: ['Orrinvale'], segment: 'Financial services', owner: 'Account team East', renewalAtRisk: true },
   { name: 'Saltmarrow Hotels', segment: 'Hospitality', owner: 'Account team West' },
   { name: 'Wrenfield Schools', segment: 'Education', owner: 'Account team East', doNotContact: true },
-  { name: 'Velloran Insurance', segment: 'Financial services', owner: 'Account team West' },
+  { name: 'Ondersley Insurance', segment: 'Financial services', owner: 'Account team West' },
   { name: 'Pellucid Harbor Software', aliases: ['Pellucid Harbor'], segment: 'Software', owner: 'Account team East' },
   { name: 'Cindergate Robotics', segment: 'Manufacturing', owner: 'Account team West' },
   { name: 'Thistlebrook Retail', segment: 'Retail', owner: 'Account team East' },
@@ -32,12 +32,12 @@ export const DEMO_CUSTOMERS = [
 const DEMO_NAMES = new Set(DEMO_CUSTOMERS.map((c) => c.name));
 
 const Q = {
-  brindle: 'With Corvane, our dispatch team stopped guessing which loads would run late.',
-  orrin: 'Corvane gave our member services team one view of every open case.',
-  velloran: 'Corvane gives our claims team one place to see what changed and why.',
-  cinder: 'Corvane helped us find the bottleneck in our test lab within a week.',
+  brindle: 'With Tamberlit, our dispatch team stopped guessing which loads would run late.',
+  orrin: 'Tamberlit gave our member services team one view of every open case.',
+  ondersley: 'Tamberlit gives our claims team one place to see what changed and why.',
+  cinder: 'Tamberlit helped us find the bottleneck in our test lab within a week.',
   graybirchQuote: 'Our lab managers trust the numbers because they can trace every one of them.',
-  graybirchClaim: 'Corvane cut our assay reporting cycle by 30% in two quarters.',
+  graybirchClaim: 'Tamberlit cut our assay reporting cycle by 30% in two quarters.',
 };
 
 // [customer, assetType, channels, startsOffsetDays, expiresOffsetDays, extra]. Dates are relative to the
@@ -53,7 +53,7 @@ export const DEMO_PERMISSIONS = [
   ['Orrinvale Credit Union', 'quote', ['sales_deck'], -150, 250, { approvedText: Q.orrin }],
   ['Saltmarrow Hotels', 'logo', ['website'], -353, 12],
   ['Wrenfield Schools', 'logo', ['website'], -100, 400],
-  ['Velloran Insurance', 'quote', ['website'], -60, 300, { approvedText: Q.velloran }],
+  ['Ondersley Insurance', 'quote', ['website'], -60, 300, { approvedText: Q.ondersley }],
   ['Pellucid Harbor Software', 'logo', ['sales_deck'], -90, 180],
   ['Cindergate Robotics', 'logo', ['sales_deck', 'website'], -120, 240],
   ['Cindergate Robotics', 'quote', ['sales_deck'], -120, 240, { approvedText: Q.cinder }],
@@ -67,21 +67,21 @@ export const DEMO_PERMISSIONS = [
 
 const p = (t) => `<p>${t}</p>`;
 const quote = (t, who) => `<blockquote><p>“${t}” - ${who}</p></blockquote>`;
-const banner = p(`<em>${DEMO_BANNER_TEXT}. Corvane Analytics and every customer named here are invented.</em>`);
+const banner = p(`<em>${DEMO_BANNER_TEXT}. Tamberlit Analytics and every customer named here are invented.</em>`);
 
 export const DEMO_PAGES = [
   {
     title: 'Homepage: customer logo wall (draft)',
     labels: ['channel-website'],
     body: banner + '<h2>Trusted by teams that move fast</h2>'
-      + p('Brindlewood Freight, Quillmere Health, Orrinvale Credit Union, Saltmarrow Hotels and Wrenfield Schools run their reporting on Corvane.')
+      + p('Brindlewood Freight, Quillmere Health, Orrinvale Credit Union, Saltmarrow Hotels and Wrenfield Schools run their reporting on Tamberlit.')
       + quote(Q.brindle, 'Head of Operations, Brindlewood Freight'),
   },
   {
     title: 'Q1 paid social ad copy',
     labels: ['channel-paid-ads'],
     body: banner + '<h2>Variant A</h2>' + p('Join Orrinvale Credit Union and Brindlewood Freight. See every open case in one view.')
-      + '<h2>Variant B</h2>' + quote('Velloran Insurance cut claims handling time by 40% with Corvane.', 'Velloran Insurance'),
+      + '<h2>Variant B</h2>' + quote('Ondersley Insurance cut claims handling time by 40% with Tamberlit.', 'Ondersley Insurance'),
   },
   {
     title: 'Case study: Brindlewood Freight',
@@ -94,7 +94,7 @@ export const DEMO_PAGES = [
     title: 'Case study: Quillmere Health',
     labels: ['channel-case-study', 'asset-case-study'],
     body: banner + '<h2>Quillmere Health: one view of every clinic</h2>'
-      + p('Quillmere Health runs outpatient clinics across three regions and used Corvane to combine their weekly reporting.'),
+      + p('Quillmere Health runs outpatient clinics across three regions and used Tamberlit to combine their weekly reporting.'),
   },
   {
     title: 'Enterprise sales deck outline',
@@ -102,19 +102,19 @@ export const DEMO_PAGES = [
     body: banner + '<h2>Slide 4: Customers like you</h2>'
       + p('Orrinvale Credit Union, Pellucid Harbor Software and Cindergate Robotics.')
       + '<h2>Slide 5: Proof</h2>'
-      + quote('Corvane helped us find every bottleneck in our test lab within a day.', 'VP Engineering, Cindergate Robotics')
+      + quote('Tamberlit helped us find every bottleneck in our test lab within a day.', 'VP Engineering, Cindergate Robotics')
       + quote(Q.orrin, 'Member Services Director, Orrinvale Credit Union'),
   },
   {
     title: 'Partner program page',
     labels: ['channel-partner'],
-    body: banner + '<h2>Partners who build on Corvane</h2>'
+    body: banner + '<h2>Partners who build on Tamberlit</h2>'
       + p('Retail analytics partners help customers like Thistlebrook Retail and Lantern Quay Media get value in weeks.'),
   },
   {
-    title: 'Press release: Corvane spring launch',
+    title: 'Press release: Tamberlit spring launch',
     labels: ['channel-press'],
-    body: banner + '<h2>Corvane launches lab reporting</h2>'
+    body: banner + '<h2>Tamberlit launches lab reporting</h2>'
       + p('Early users include Graybirch Biotech and Kestrelmoor Energy.')
       + quote(Q.graybirchClaim, 'Lab Director, Graybirch Biotech'),
   },
@@ -127,7 +127,7 @@ export const DEMO_PAGES = [
 
 export const DEMO_REQUESTS = [
   { summary: 'Reference call for a logistics prospect', customer: 'Brindlewood Freight', assetType: 'reference_call', channel: 'sales_call', purpose: 'Late-stage logistics deal' },
-  { summary: 'Quote Velloran Insurance in a LinkedIn ad', customer: 'Velloran Insurance', assetType: 'quote', channel: 'paid_ads', quoteText: Q.velloran, purpose: 'Q1 paid social' },
+  { summary: 'Quote Ondersley Insurance in a paid social ad', customer: 'Ondersley Insurance', assetType: 'quote', channel: 'paid_ads', quoteText: Q.ondersley, purpose: 'Q1 paid social' },
   { summary: 'Reference call for a biotech prospect', customer: 'Graybirch Biotech', assetType: 'reference_call', channel: 'sales_call', purpose: 'Healthcare pipeline' },
   { summary: 'Orrinvale logo on webinar slide', customer: 'Orrinvale Credit Union', assetType: 'logo', channel: 'events', purpose: 'Spring webinar' },
   { summary: 'Cindergate quote in the enterprise deck', customer: 'Cindergate Robotics', assetType: 'quote', channel: 'sales_deck', quoteText: Q.cinder, purpose: 'Enterprise deck refresh' },
@@ -217,6 +217,8 @@ export function buildDemoRecords(today, { consentFor = null, previous = {} } = {
 //   searchIssues(jql) -> [{ key, summary, labels }]   createIssue(projectKey, summary, labels) -> key
 //   addIssueLabels(key, labels)   getIssueProperty(key, prop) -> value | null   setIssueProperty(key, prop, value)
 //   closeIssue(key) -> boolean
+//   deleteOrg?(orgId)  deleteRecord?(orgId)  renameIssue?(key, summary)   (optional; used to retire
+//   demo records whose fictional name was changed in a later version)
 //   consentFor?(n, customer, perm) -> string | null    (optional; the seed script uses it for JSM consent tickets)
 // }
 
@@ -226,7 +228,7 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
   const space = await io.findSpace(spaceKey);
   if (!space) throw new Error(`Confluence space ${spaceKey} was not found. Choose another space.`);
 
-  const report = { customers: { created: 0, updated: 0, kept: 0 }, pages: { created: 0, updated: 0, kept: 0 }, requests: { created: 0, updated: 0, kept: 0 }, fixTasksClosed: 0, skipped: [] };
+  const report = { customers: { created: 0, updated: 0, kept: 0, retired: 0 }, pages: { created: 0, updated: 0, kept: 0 }, requests: { created: 0, updated: 0, kept: 0 }, fixTasksClosed: 0, skipped: [] };
 
   // 1. Customers (JSM organizations with a ledger record).
   const orgs = await io.listOrgs();
@@ -248,6 +250,19 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
       report.customers.created++;
     }
     ids[c.name] = String(org.id);
+  }
+  // Retire demo customers from an earlier version of the demo data (fictional names that were later
+  // changed): a record marked demo: true whose name is no longer a demo name.
+  const retiredIds = new Set();
+  for (const o of orgs) {
+    if (isDemoName(o.name)) continue;
+    const rec = await io.getRecord(o.id);
+    if (rec?.demo !== true) continue;
+    if (io.deleteOrg) await io.deleteOrg(o.id);
+    else if (io.deleteRecord) await io.deleteRecord(o.id);
+    else continue;
+    retiredIds.add(String(o.id));
+    report.customers.retired++;
   }
   const records = buildDemoRecords(today, { consentFor: io.consentFor || null, previous: existing });
   for (const c of DEMO_CUSTOMERS) {
@@ -291,7 +306,21 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
   const demoIds = new Set(Object.values(ids));
   const have = await io.searchIssues(`project = "${taskProject}" AND labels = "${DEMO_REQUEST_LABEL}" ORDER BY created ASC`);
   const byTitle = new Map();
+  const renamed = new Set();
   for (const i of have) {
+    if (!REQUEST_SUMMARIES.has(i.summary) && (i.labels || []).includes(DEMO_LABEL) && io.renameIssue) {
+      // A demo request from an earlier version (its customer was renamed): match it by use, channel
+      // and purpose, give it the current title, and point it at the current demo customer below.
+      const prop = await io.getIssueProperty(i.key, 'proof-request');
+      const match = prop && retiredIds.has(String(prop.customerId))
+        && DEMO_REQUESTS.find((r) => r.assetType === prop.assetType && r.channel === prop.channel && r.purpose === prop.purpose);
+      if (match && !byTitle.has(match.summary)) {
+        await io.renameIssue(i.key, match.summary);
+        byTitle.set(match.summary, { ...i, summary: match.summary });
+        renamed.add(match.summary);
+      }
+      continue;
+    }
     if (!REQUEST_SUMMARIES.has(i.summary) || byTitle.has(i.summary)) continue;
     let isDemo = (i.labels || []).includes(DEMO_LABEL);
     if (!isDemo) {
@@ -312,7 +341,7 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
       continue;
     }
     if (!(issue.labels || []).includes(DEMO_LABEL)) await io.addIssueLabels(issue.key, [DEMO_LABEL]);
-    if (reset) {
+    if (reset || renamed.has(r.summary)) {
       await io.setIssueProperty(issue.key, 'proof-request', value);
       report.requests.updated++;
     } else report.requests.kept++;
@@ -323,7 +352,7 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
   if (reset) {
     const open = await io.searchIssues(`project = "${taskProject}" AND labels = "proof-fix" AND statusCategory != Done`);
     for (const i of open) {
-      if (!isDemoFixTask(i.labels, demoIds)) continue;
+      if (!isDemoFixTask(i.labels, new Set([...demoIds, ...retiredIds]))) continue;
       if (await io.closeIssue(i.key)) report.fixTasksClosed++;
     }
     log(`fix tasks closed: ${report.fixTasksClosed}`);
@@ -333,7 +362,7 @@ export async function applyDemo(io, { today, taskProject, spaceKey, reset = fals
 
 export function summarizeDemoReport(r, reset) {
   const parts = [
-    `${r.customers.created} customer(s) created, ${r.customers.updated} restored, ${r.customers.kept} already present`,
+    `${r.customers.created} customer(s) created, ${r.customers.updated} restored, ${r.customers.kept} already present${r.customers.retired ? `, ${r.customers.retired} old demo customer(s) retired` : ''}`,
     `${r.pages.created} page(s) created, ${r.pages.updated} restored, ${r.pages.kept} already present`,
     `${r.requests.created} proof request(s) created, ${r.requests.updated} restored, ${r.requests.kept} already present`,
   ];

@@ -2,10 +2,24 @@ import React from 'react';
 import { Lozenge } from '@forge/react';
 import { invoke } from '@forge/bridge';
 
-export async function call(name, payload) {
-  const r = await invoke(name, payload);
-  if (!r?.ok) throw new Error(r?.error || 'Request failed');
-  return r.data;
+export const isTimeout = (e) => /timed out|timeout/i.test(String(e?.message || e));
+
+// Call a resolver. The first call after the app has been idle can hit a cold start and the 25 s
+// resolver limit; retry once automatically. `onRetry` lets the caller show "Still loading".
+export async function call(name, payload, { retries = 1, onRetry = null } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    let r;
+    try {
+      r = await invoke(name, payload);
+    } catch (e) {
+      if (attempt < retries && isTimeout(e)) { onRetry && onRetry(); continue; }
+      throw e;
+    }
+    if (r?.ok) return r.data;
+    const err = new Error(r?.error || 'Request failed');
+    if (attempt < retries && isTimeout(err)) { onRetry && onRetry(); continue; }
+    throw err;
+  }
 }
 
 const APPEARANCE = { ALLOWED: 'success', CLEAR: 'success', NEEDS_CONSENT: 'moved', BLOCKED: 'removed', WARNING: 'inprogress', UNLABELED: 'default' };
@@ -19,7 +33,7 @@ export const verdictLabel = (v) => LABEL[v] || v;
 
 // Start a queued job and poll until it finishes (scans and sweeps can outlast a 25 s resolver).
 export async function runJob(kind, args = {}, { intervalMs = 2500, maxMs = 300000 } = {}) {
-  const { id } = await call('startJob', { kind, args });
+  const { id } = await call('startJob', { kind, args }, { retries: 0 });
   const t0 = Date.now();
   while (Date.now() - t0 < maxMs) {
     await new Promise((r) => setTimeout(r, intervalMs));

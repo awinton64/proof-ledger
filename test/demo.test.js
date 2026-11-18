@@ -71,7 +71,7 @@ test('only organizations with a Proof Ledger record are customers; others are li
 
 test('untracked organizations are never matched by a page scan', () => {
   const l = splitLedger([{ id: 1, name: 'Brindlewood Freight' }, { id: 2, name: 'Campbell Lake Freight Inc' }], [{ permissions: [] }, null]);
-  const r = scanPage({ title: 't', text: 'Campbell Lake Freight Inc and Brindlewood Freight use Corvane.', labels: ['channel-website'], customers: l.customers, permissions: l.permissions, today });
+  const r = scanPage({ title: 't', text: 'Campbell Lake Freight Inc and Brindlewood Freight use Tamberlit.', labels: ['channel-website'], customers: l.customers, permissions: l.permissions, today });
   assert.deepEqual([...new Set(r.findings.map((f) => f.customer))], ['Brindlewood Freight']);
 });
 
@@ -257,8 +257,42 @@ test('clear errors when the space or project is missing', async () => {
 });
 
 test('page bodies compare equal after Confluence entity encoding', () => {
-  const ours = '<p>“With Corvane, it works.” - Ops</p>';
-  assert.equal(sameStorage(ours, '<p>&ldquo;With Corvane, it works.&rdquo; - Ops</p>'), true);
-  assert.equal(sameStorage(ours, '<p>&#8220;With Corvane, it works.&#8221;  - Ops</p>'), true);
-  assert.equal(sameStorage(ours, '<p>&ldquo;With Corvane, it changed.&rdquo; - Ops</p>'), false);
+  const ours = '<p>“With Tamberlit, it works.” - Ops</p>';
+  assert.equal(sameStorage(ours, '<p>&ldquo;With Tamberlit, it works.&rdquo; - Ops</p>'), true);
+  assert.equal(sameStorage(ours, '<p>&#8220;With Tamberlit, it works.&#8221;  - Ops</p>'), true);
+  assert.equal(sameStorage(ours, '<p>&ldquo;With Tamberlit, it changed.&rdquo; - Ops</p>'), false);
+});
+
+// ---------- retiring demo records from an earlier version (renamed fictional customers) ----------
+
+test('load retires an old demo customer whose name changed and moves its proof request to the new name', async () => {
+  const site = fakeSite();
+  await applyDemo(site.io, opts);
+  // Simulate an older demo: one demo customer under a former fictional name, with its request.
+  const renamedReq = DEMO_REQUESTS.find((r) => r.purpose === 'Q1 paid social');
+  const current = site.orgs.find((o) => o.name === renamedReq.customer);
+  current.name = 'Old Fictional Insurer';
+  const issue = site.issues.find((i) => i.summary === renamedReq.summary);
+  issue.summary = 'Old demo request title';
+  site.issues.push({ key: 'PROOF-900', project: 'PROOF', summary: 'Fix proof', labels: ['proof-fix', `pl-5000-${current.id}`], props: {}, status: 'open' });
+  site.io.deleteOrg = async (id) => { site.orgs = site.orgs.filter((o) => String(o.id) !== String(id)); delete site.records[id]; site.writes.push(['deleteOrg', id]); };
+  site.io.renameIssue = async (key, summary) => { site.issues.find((i) => i.key === key).summary = summary; site.writes.push(['rename', key]); };
+
+  const r = await applyDemo(site.io, { ...opts, reset: true });
+  assert.equal(r.customers.retired, 1);
+  assert.equal(site.orgs.some((o) => o.name === 'Old Fictional Insurer'), false);
+  const newOrg = site.orgs.find((o) => o.name === renamedReq.customer);
+  assert.ok(newOrg);
+  assert.equal(issue.summary, renamedReq.summary);
+  assert.equal(String(issue.props['proof-request'].customerId), String(newOrg.id));
+  assert.equal(site.issues.filter((i) => i.summary === renamedReq.summary).length, 1, 'no duplicate request');
+  assert.equal(site.issues.find((i) => i.key === 'PROOF-900').status, 'done', 'fix task of the retired customer is closed');
+});
+
+test('organizations without demo: true are never retired, even with unknown names', async () => {
+  const site = fakeSite({ orgs: [{ id: 7, name: 'Real Customer Inc' }], records: { 7: { permissions: [], status: 'active' } } });
+  site.io.deleteOrg = async () => { throw new Error('must not delete'); };
+  const r = await applyDemo(site.io, opts);
+  assert.equal(r.customers.retired, 0);
+  assert.ok(site.orgs.some((o) => o.name === 'Real Customer Inc'));
 });

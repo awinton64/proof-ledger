@@ -9,7 +9,7 @@ const gone = { id: 'c3', name: 'Orrinvale Credit Union', status: 'churned', chur
 const customers = [acme, quill, gone];
 const permissions = [
   { id: 'p1', customerId: 'c1', assetType: 'logo', channels: ['website', 'sales_deck'], startsOn: '2026-01-01', expiresOn: '2027-06-30', consentSource: 'CUST-1' },
-  { id: 'p2', customerId: 'c1', assetType: 'quote', channels: ['website', 'case_study'], startsOn: '2026-01-01', expiresOn: '2026-12-01', approvedText: 'Corvane cut our month-end reporting from four days to one.' },
+  { id: 'p2', customerId: 'c1', assetType: 'quote', channels: ['website', 'case_study'], startsOn: '2026-01-01', expiresOn: '2026-12-01', approvedText: 'Tamberlit cut our month-end reporting from four days to one.' },
   { id: 'p3', customerId: 'c1', assetType: 'reference_call', channels: ['sales_call'], startsOn: '2026-01-01', expiresOn: '2027-12-31', maxPerQuarter: 2 },
   { id: 'p4', customerId: 'c2', assetType: 'logo', channels: ['website'], startsOn: '2025-01-01', expiresOn: '2026-10-31' },
   { id: 'p5', customerId: 'c3', assetType: 'logo', channels: ['website', 'paid_ads'], startsOn: '2026-01-01', expiresOn: '2027-12-31' },
@@ -51,13 +51,13 @@ test('revoked permission is blocked', () => {
 });
 
 test('expiry within 30 days is allowed with a warning', () => {
-  const v = evaluate({ customer: acme, permissions, assetType: 'quote', channel: 'website', today, quoteText: 'Corvane cut our month-end reporting from four days to one.' });
+  const v = evaluate({ customer: acme, permissions, assetType: 'quote', channel: 'website', today, quoteText: 'Tamberlit cut our month-end reporting from four days to one.' });
   assert.equal(v.verdict, VERDICT.ALLOWED);
   assert.match(v.warnings[0], /expires in 13 days/);
 });
 
 test('changed quote wording needs consent', () => {
-  const v = evaluate({ customer: acme, permissions, assetType: 'quote', channel: 'website', today, quoteText: 'Corvane cut our month-end reporting from four days to ten minutes.' });
+  const v = evaluate({ customer: acme, permissions, assetType: 'quote', channel: 'website', today, quoteText: 'Tamberlit cut our month-end reporting from four days to ten minutes.' });
   assert.equal(v.verdict, VERDICT.NEEDS_CONSENT);
   assert.match(v.reasons[0], /wording differs/);
 });
@@ -91,8 +91,8 @@ test('mentions match whole words and aliases, case-insensitive', () => {
 });
 
 test('quote matching ignores punctuation, case and curly quotes', () => {
-  assert.ok(quoteMatches('corvane cut our month‑end reporting from four days to one', 'Corvane cut our month-end reporting from four days to one.'));
-  assert.ok(!quoteMatches('Corvane cut reporting time in half', 'Corvane cut our month-end reporting from four days to one.'));
+  assert.ok(quoteMatches('tamberlit cut our month‑end reporting from four days to one', 'Tamberlit cut our month-end reporting from four days to one.'));
+  assert.ok(!quoteMatches('Tamberlit cut reporting time in half', 'Tamberlit cut our month-end reporting from four days to one.'));
 });
 
 test('channel label parsing', () => {
@@ -101,7 +101,7 @@ test('channel label parsing', () => {
 });
 
 test('page scan flags wrong channel, churned customer and altered quote', () => {
-  const html = '<h1>Q4 paid campaign</h1><p>Trusted by Brindlewood Freight and Orrinvale Credit Union.</p><blockquote>“Corvane cut our month-end reporting from four days to ten minutes.” - Brindlewood Freight</blockquote>';
+  const html = '<h1>Q4 paid campaign</h1><p>Trusted by Brindlewood Freight and Orrinvale Credit Union.</p><blockquote>“Tamberlit cut our month-end reporting from four days to ten minutes.” - Brindlewood Freight</blockquote>';
   const r = scanPage({ title: 'Ad copy', text: htmlToText(html), labels: ['channel-paid-ads'], customers, permissions, today });
   assert.equal(r.status, 'BLOCKED');
   const kinds = r.findings.map((f) => `${f.customer}:${f.kind}:${f.verdict}`).sort();
@@ -113,7 +113,7 @@ test('page scan flags wrong channel, churned customer and altered quote', () => 
 });
 
 test('page scan is clear when every use is covered', () => {
-  const text = 'Brindlewood Freight says: "Corvane cut our month-end reporting from four days to one."';
+  const text = 'Brindlewood Freight says: "Tamberlit cut our month-end reporting from four days to one."';
   const r = scanPage({ title: 'Home', text, labels: ['channel-website'], customers, permissions, today });
   assert.equal(r.findings.filter((f) => f.verdict !== 'WARNING').length, 0);
   assert.notEqual(r.status, 'BLOCKED');
@@ -126,7 +126,7 @@ test('unlabeled pages are reported, not flagged', () => {
 });
 
 test('outcome claims need outcome or matching quote consent', () => {
-  const text = 'Quillmere Health: "We reduced claim handling time by 40% in one quarter with Corvane."';
+  const text = 'Quillmere Health: "We reduced claim handling time by 40% in one quarter with Tamberlit."';
   const r = scanPage({ title: 'Deck', text, labels: ['channel-sales-deck'], customers, permissions, today });
   assert.ok(r.findings.some((f) => f.kind === 'outcome_claim' && f.verdict === 'NEEDS_CONSENT'));
 });

@@ -1,5 +1,5 @@
 // Seeds the fictional Proof Ledger demo into an Atlassian site.
-// Every company here is invented. "Corvane Analytics" is the fictional vendor.
+// Every company here is invented. "Tamberlit Analytics" is the fictional vendor.
 // Usage: SITE=https://your-site.atlassian.net ATL_EMAIL=... ATL_TOKEN=... node scripts/seed.mjs [--reset]
 // Optional: JSM_PROJECT=CUST TASK_PROJECT=PROOF SPACE_KEY=MKT. Safe to re-run: it only creates what is
 // missing and never changes non-demo records. --reset restores demo records and closes demo fix tasks.

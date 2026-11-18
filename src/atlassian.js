@@ -3,6 +3,7 @@
 // separate Forge storage) read and write the same records, and the data never leaves the site.
 import api, { route } from '@forge/api';
 import { htmlToText, splitLedger } from './engine';
+import { noJsmError } from './guards';
 
 export const PROP = 'proof-ledger';
 const EMPTY = { aliases: [], status: 'active', segment: '', owner: '', permissions: [], uses: [] };
@@ -34,7 +35,12 @@ export async function listOrganizations() {
   const out = [];
   let start = 0;
   for (let i = 0; i < 20; i++) {
-    const page = await jira(route`/rest/servicedeskapi/organization?start=${start}&limit=50`);
+    let page;
+    try {
+      page = await jira(route`/rest/servicedeskapi/organization?start=${start}&limit=50`);
+    } catch (e) {
+      throw noJsmError(e);
+    }
     out.push(...page.values);
     if (page.isLastPage || page.values.length === 0) break;
     start += page.values.length;
@@ -225,4 +231,34 @@ export async function currentUserIsAdmin() {
   if (!res.ok) return false;
   const body = await res.json();
   return !!body?.permissions?.ADMINISTER?.havePermission;
+}
+
+// Can the invoking user open this Confluence page? Read the page as the user (not as the app):
+// Confluence applies space permissions and page restrictions. Used before a Rovo action or MCP tool
+// returns page content. With no user context the answer is no.
+export async function userCanViewPage(pageId, accountId = null) {
+  const attempts = [() => api.asUser(), ...(accountId ? [() => api.asUser(accountId)] : [])];
+  for (const make of attempts) {
+    try {
+      const res = await make().requestConfluence(route`/wiki/api/v2/pages/${pageId}`, { headers: { Accept: 'application/json' } });
+      if (res.ok) return true;
+      if ([401, 403, 404].includes(res.status)) return false;
+    } catch (e) {
+      // No user context in this invocation (or no consent): try the next way, then deny.
+      console.warn(`asUser page check failed: ${e.message}`);
+    }
+  }
+  return false;
+}
+
+export async function deleteOrganization(orgId) {
+  await jira(route`/rest/servicedeskapi/organization/${orgId}`, { method: 'DELETE' });
+}
+
+export async function renameIssue(key, summary) {
+  await jira(route`/rest/api/3/issue/${key}`, { method: 'PUT', body: JSON.stringify({ fields: { summary } }) });
+}
+
+export async function deleteLedgerRecord(orgId) {
+  await jira(route`/rest/servicedeskapi/organization/${orgId}/property/${PROP}`, { method: 'DELETE' });
 }

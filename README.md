@@ -25,6 +25,8 @@ B2B marketing and sales teams name customers all the time: logo walls, quotes in
 | Rovo agent "Proof Desk" | Answers "Can we use this customer's quote in a paid ad?" and "Which healthcare customers can sales use for a reference call?" by calling the same rule engine. |
 | Rovo tools and MCP exposure | The same three actions (`check-proof`, `list-referenceable`, `scan-page`) can be added as tools to any custom agent in Rovo Studio (tested). They are also exposed through the Atlassian MCP server with a `rovo:mcp` module, for outside AI writing tools; a call from an outside MCP client has not been tested yet, because the test organization limits the Atlassian MCP server to trusted domains. |
 
+`scan-page` checks, as the invoking user, that they can open the page (space permissions and page restrictions apply) before it returns a title, link or excerpt; otherwise it answers that the page does not exist or they lack permission.
+
 The verdicts come from rules, not AI. The core app needs no Rovo and makes no LLM calls. Rovo adds a conversational way in, built on the same deterministic engine.
 
 ## Rules
@@ -38,18 +40,27 @@ A use is checked against the customer's permissions for that asset type:
 
 Text matching is exact and normalized (case, punctuation, curly quotes, accents). A quote near a customer's name is treated as theirs; a quote containing a number or percentage is treated as an outcome claim.
 
+## Requirements and limits
+
+- Jira, **Jira Service Management** (the Free plan works) and Confluence on the same site. Without Jira Service Management the ledger cannot load, and the app says so.
+- Install the app in both Jira and Confluence. The daily expiry sweep runs from the Jira installation only.
+- Within 24 hours of loading the demo, the daily sweep raises its own fix tasks for the revoked and expired demo permissions. That is expected; Reset demo data closes them.
+- **Scan Confluence** runs one text search per ledger customer and checks at most 60 pages, so the dashboard is a check of pages that name ledger customers, not a full-site audit.
+- Ledger edits are open to every Jira user of the app; only the demo loader is limited to Jira administrators.
+
 ## Try it
 
 Labels the scanner reads on Confluence pages: `channel-website`, `channel-paid-ads`, `channel-social`, `channel-sales-deck`, `channel-case-study`, `channel-press`, `channel-events`, `channel-partner`; optional `asset-case-study`. Pages without a channel label are treated as internal and only reported.
 
 ### Demo data
 
-To try the app with fictional data, open **Apps > Proof Ledger > Demo data** as a Jira administrator, choose a Jira project (for proof requests and fix tasks) and a Confluence space (for the demo pages), and click **Load demo data**. It creates 12 invented customers of the invented vendor Corvane Analytics (as JSM organizations), 20 permissions, 8 labeled Confluence pages and 6 proof requests. It takes about a minute.
+To try the app with fictional data, open **Apps > Proof Ledger > Demo data** as a Jira administrator, choose a Jira project (for proof requests and fix tasks) and a Confluence space (for the demo pages), and click **Load demo data**. It creates 12 invented customers of the invented vendor Tamberlit Analytics (as JSM organizations), 20 permissions, 8 labeled Confluence pages and 6 proof requests. It takes about a minute.
 
 - Safe to run again: it only creates what is missing and keeps changes you made to demo records.
 - **Reset demo data** restores the demo records and pages and closes fix tasks raised for demo customers.
 - It never changes non-demo data. Demo records are marked (`demo: true` on the ledger record, label `proof-ledger-demo` on pages and issues); a customer, page or issue with a demo name but real data is skipped and reported.
 - To remove the demo later, delete the demo organizations in JSM, the demo pages and the demo issues.
+- If a later version renames a fictional demo customer, Load or Reset takes the old demo customer out of the ledger and moves its proof request to the new name.
 
 The same loader runs from the command line, for scripted setups (it also creates one synthetic JSM consent request per permission when a service project with key `CUST` exists):
 
@@ -65,7 +76,7 @@ Demo script: open the Q1 paid social ad copy page and click **Proof check**; ope
 
 ```
 npm install
-npm test                 # engine and demo-data tests (node:test)
+npm test                 # engine, demo-data and guard tests (node:test, 41 tests)
 forge deploy && forge install
 ```
 

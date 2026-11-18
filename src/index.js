@@ -3,6 +3,7 @@ import { kvs } from '@forge/kvs';
 import Resolver from '@forge/resolver';
 import * as svc from './service';
 import * as atl from './atlassian';
+import { scanPageForUser, shouldRunDailySweep, installProduct } from './guards';
 
 const resolver = new Resolver();
 const wrap = (fn) => async (req) => {
@@ -10,7 +11,7 @@ const wrap = (fn) => async (req) => {
     return { ok: true, data: await fn(req) };
   } catch (e) {
     console.error(e);
-    return { ok: false, error: String(e.message || e) };
+    return { ok: false, error: String(e.message || e), code: e.code || null };
   }
 };
 
@@ -26,6 +27,7 @@ resolver.define('sweep', wrap(() => svc.sweep({ reason: 'manual' })));
 resolver.define('saveSettings', wrap(({ payload }) => svc.saveSettings(payload)));
 resolver.define('check', wrap(({ payload }) => svc.checkProof(payload)));
 resolver.define('addCustomer', wrap(({ payload }) => svc.addCustomer(payload)));
+resolver.define('home', wrap(async () => svc.getHome({ isAdmin: await atl.currentUserIsAdmin() })));
 resolver.define('demoSetup', wrap(async () => svc.getDemoSetup({ isAdmin: await atl.currentUserIsAdmin() })));
 
 // Jira issue panel
@@ -49,8 +51,14 @@ export async function onPageEvent(event) {
   }
 }
 
-// Daily expiry and churn sweep (Jira installation).
-export async function dailySweep() {
+// Daily expiry and churn sweep. A scheduled trigger fires once per product installation, and only
+// the Jira installation holds the settings (task project), so the Confluence copy does nothing.
+export async function dailySweep(event, context) {
+  if (!shouldRunDailySweep(context)) {
+    console.log(`daily sweep skipped in the ${installProduct(context)} installation`);
+    return;
+  }
+  console.log(`daily sweep running (${installProduct(context) || 'unknown'} installation)`);
   try {
     const r = await svc.sweep({ reason: 'daily schedule' });
     console.log(`daily sweep: ${r.created.length} task(s) created, ${r.existing.length} already open`);
@@ -70,9 +78,14 @@ export async function listReferenceableAction(payload) {
   return svc.listReferenceable({ assetType: payload.assetType, channel: payload.channel, segment: payload.segment });
 }
 
-export async function scanPageAction(payload) {
-  const r = await svc.scanById(String(payload.pageId), { persist: false });
-  return { page: r.title, url: r.url, channel: r.channel, status: r.status, summary: r.summary, findings: r.findings };
+export async function scanPageAction(payload, context) {
+  const accountId = context?.principal?.accountId || payload?.context?.accountId || null;
+  const r = await scanPageForUser(payload?.pageId, {
+    canView: (id) => atl.userCanViewPage(id, accountId),
+    scan: (id) => svc.scanById(id, { persist: false }),
+  });
+  console.log(`scan-page action: page ${payload?.pageId} ${r.denied ? 'denied' : r.error ? 'bad input' : 'scanned'}`);
+  return r;
 }
 
 // ---------- long-running jobs (scan all pages, sweep) run on an async queue ----------

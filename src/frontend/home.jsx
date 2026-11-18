@@ -20,20 +20,18 @@ const Stat = ({ label, value, tone }) => (
 
 // ---------------- Dashboard ----------------
 
-const Dashboard = ({ version, onChanged }) => {
-  const [d, setD] = useState(null);
+const Dashboard = ({ data, onChanged }) => {
+  const [d, setD] = useState(data);
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
-  const load = () => call('dashboard').then(setD).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, [version]);
+  useEffect(() => { setD(data); }, [data]);
   const run = (name, label) => {
     setBusy(label);
     setError(null);
     runJob(name).then((r) => {
       if (name === 'sweep') setMsg(`Sweep checked ${r.pagesChecked} page(s) for ${r.affected.length} affected customer(s): ${r.created.length} new fix task(s)${r.created.length ? ` (${r.created.map((c) => c.key).join(', ')})` : ''}, ${r.existing.length} already open.`);
       else setMsg(`Scanned ${r.pages} page(s) that name a ledger customer.`);
-      return load();
     }).catch((e) => setError(e.message)).finally(() => { setBusy(''); onChanged && onChanged(); });
   };
   if (error && !d) return <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage>;
@@ -122,15 +120,15 @@ const Dashboard = ({ version, onChanged }) => {
 
 const EMPTY = { customerId: '', assetType: 'logo', channels: [], startsOn: '', expiresOn: '', consentSource: '', approvedText: '', maxPerQuarter: '', revoked: false };
 
-const Ledger = ({ version, onChanged }) => {
-  const [v, setV] = useState(null);
+const Ledger = ({ view, onChanged }) => {
+  const [v, setV] = useState(view);
   const [form, setForm] = useState(EMPTY);
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
   const [busy, setBusy] = useState(false);
   const [addOrg, setAddOrg] = useState(null);
   const [newName, setNewName] = useState('');
-  useEffect(() => { call('ledger').then(setV).catch((e) => setError(e.message)); }, [version]);
+  useEffect(() => { setV(view); }, [view]);
   const act = (name, payload, after) => {
     setBusy(true);
     setError(null);
@@ -232,18 +230,16 @@ const Ledger = ({ version, onChanged }) => {
 
 // ---------------- Quick check ----------------
 
-const Check = () => {
-  const [v, setV] = useState(null);
+const Check = ({ view: v }) => {
   const [form, setForm] = useState({ customer: '', assetType: 'logo', channel: 'website', quoteText: '' });
   const [r, setR] = useState(null);
   const [error, setError] = useState(null);
-  useEffect(() => { call('ledger').then(setV).catch((e) => setError(e.message)); }, []);
-  if (!v) return error ? <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage> : <Spinner />;
   const customers = v.customers.map((c) => ({ value: c.id, label: c.name }));
   const assets = opt(v.assetTypes);
   const channels = opt(v.channels);
   return (
     <Stack space="space.200">
+      {error && <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage>}
       <Text>The same rule check that the issue panel, the Confluence byline, the Rovo agent and the MCP tools use.</Text>
       <Inline space="space.150" grow="fill">
         <Stack space="space.050" grow="fill"><Label labelFor="q-c">Customer</Label><Select inputId="q-c" options={customers} onChange={(o) => setForm({ ...form, customer: o?.value || '' })} /></Stack>
@@ -264,18 +260,12 @@ const Check = () => {
 
 // ---------------- Demo data (admins) ----------------
 
-const Demo = ({ onChanged }) => {
-  const [s, setS] = useState(null);
-  const [form, setForm] = useState({ taskProject: '', spaceKey: '' });
+const Demo = ({ setup, onChanged }) => {
+  const s = setup;
+  const [form, setForm] = useState({ taskProject: setup.settings.taskProject || '', spaceKey: setup.settings.demoSpaceKey || '' });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
-  const load = () => call('demoSetup').then((r) => {
-    setS(r);
-    setForm({ taskProject: r.settings.taskProject || '', spaceKey: r.settings.demoSpaceKey || '' });
-  }).catch((e) => setError(e.message));
-  useEffect(() => { load(); }, []);
-  if (!s) return error ? <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage> : <Spinner />;
   if (!s.isAdmin) return <SectionMessage appearance="information"><Text>Only Jira administrators can load or reset the demo data.</Text></SectionMessage>;
   const projects = s.projects.map((p) => ({ value: p.key, label: `${p.name} (${p.key})` }));
   const spaces = s.spaces.map((x) => ({ value: x.key, label: `${x.name} (${x.key})` }));
@@ -285,13 +275,13 @@ const Demo = ({ onChanged }) => {
     setError(null);
     setMsg(null);
     runJob('demo', { reset, taskProject: form.taskProject, spaceKey: form.spaceKey }, { maxMs: 600000 })
-      .then((r) => { setMsg({ text: `${reset ? 'Demo reset' : 'Demo loaded'}: ${r.message}`, skipped: r.skipped || [] }); return load(); })
+      .then((r) => { setMsg({ text: `${reset ? 'Demo reset' : 'Demo loaded'}: ${r.message}`, skipped: r.skipped || [] }); })
       .catch((e) => setError(e.message))
       .finally(() => { setBusy(''); onChanged && onChanged(); });
   };
   return (
     <Stack space="space.200">
-      <Text>Load a small, entirely fictional demo so you can try Proof Ledger right away: 12 invented customers of the invented vendor Corvane Analytics (as Jira Service Management organizations), 20 consent records, 8 marketing pages in the Confluence space you choose, and 6 proof requests in the Jira project you choose.</Text>
+      <Text>Load a small, entirely fictional demo so you can try Proof Ledger right away: 12 invented customers of the invented vendor Tamberlit Analytics (as Jira Service Management organizations), 20 consent records, 8 marketing pages in the Confluence space you choose, and 6 proof requests in the Jira project you choose.</Text>
       <Text>Safe to run more than once. It only creates or changes demo records (marked as demo), never your own customers, pages or issues. Reset restores the demo to its starting state and closes fix tasks raised for demo customers.</Text>
       <Text>{`Demo customers in the ledger: ${s.demoCustomers} of ${s.demoTotal}.`}</Text>
       <Inline space="space.150" grow="fill">
@@ -319,23 +309,48 @@ const Demo = ({ onChanged }) => {
 };
 
 const App = () => {
+  const [home, setHome] = useState(null);
+  const [error, setError] = useState(null);
+  const [retrying, setRetrying] = useState(false);
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((x) => x + 1);
+  useEffect(() => {
+    setError(null);
+    call('home', {}, { onRetry: () => setRetrying(true) })
+      .then((h) => { setHome(h); setRetrying(false); })
+      .catch((e) => { setError(e.message); setRetrying(false); });
+  }, [version]);
+  const pad = xcss({ paddingTop: 'space.200', width: '100%' });
+  let body;
+  if (home?.needsJsm) {
+    body = <SectionMessage appearance="warning" title="Jira Service Management is required"><Text>{home.message}</Text></SectionMessage>;
+  } else if (!home) {
+    body = error
+      ? <SectionMessage appearance="error" title="Proof Ledger could not load"><Stack space="space.100"><Text>{error}</Text><Inline><Button onClick={bump}>Try again</Button></Inline></Stack></SectionMessage>
+      : <Inline space="space.100" alignBlock="center"><Spinner /><Text>{retrying ? 'Still loading (the app was asleep), retrying...' : 'Loading the ledger...'}</Text></Inline>;
+  } else {
+    body = (
+      <Stack space="space.100">
+        {error && <SectionMessage appearance="error"><Stack space="space.100"><Text>{`Refresh failed: ${error}`}</Text><Inline><Button onClick={bump}>Try again</Button></Inline></Stack></SectionMessage>}
+        <Tabs id="pl-tabs">
+          <TabList>
+            <Tab>Dashboard</Tab>
+            <Tab>Customers and permissions</Tab>
+            <Tab>Quick check</Tab>
+            <Tab>Demo data</Tab>
+          </TabList>
+          <TabPanel><Box xcss={pad}><Dashboard data={home.dashboard} onChanged={bump} /></Box></TabPanel>
+          <TabPanel><Box xcss={pad}><Ledger view={home.view} onChanged={bump} /></Box></TabPanel>
+          <TabPanel><Box xcss={pad}><Check view={home.view} /></Box></TabPanel>
+          <TabPanel><Box xcss={pad}><Demo setup={home.demo} onChanged={bump} /></Box></TabPanel>
+        </Tabs>
+      </Stack>
+    );
+  }
   return (
     <Stack space="space.200">
       <Text>Know which customers you may name, where, and until when. Consent lives on each customer's Jira Service Management organization; checks are rules, not AI.</Text>
-      <Tabs id="pl-tabs">
-        <TabList>
-          <Tab>Dashboard</Tab>
-          <Tab>Customers and permissions</Tab>
-          <Tab>Quick check</Tab>
-          <Tab>Demo data</Tab>
-        </TabList>
-        <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Dashboard version={version} onChanged={bump} /></Box></TabPanel>
-        <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Ledger version={version} onChanged={bump} /></Box></TabPanel>
-        <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Check /></Box></TabPanel>
-        <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Demo onChanged={bump} /></Box></TabPanel>
-      </Tabs>
+      {body}
     </Stack>
   );
 };

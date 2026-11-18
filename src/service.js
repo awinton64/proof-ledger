@@ -119,8 +119,8 @@ function slimScan(s) {
   return { pageId: s.pageId, title: s.title, url: s.url, channel: s.channel, status: s.status, summary: s.summary, findings: s.findings.map((f) => ({ customerId: f.customerId, customer: f.customer, kind: f.kind, verdict: f.verdict, reasons: f.reasons, excerpt: f.excerpt, fix: f.fix })) };
 }
 
-export async function getDashboard() {
-  const ledger = await atl.loadLedger();
+export async function getDashboard(preloaded = null) {
+  const ledger = preloaded || (await atl.loadLedger());
   const last = (await kvs.get('lastScan')) || { at: null, scans: [] };
   const d = dashboard({ ...ledger, scans: last.scans, today: today() });
   return { ...d, lastScanAt: last.at, lastSweep: (await kvs.get('lastSweep')) || null, today: today() };
@@ -210,8 +210,8 @@ export async function logUse(issueKey) {
 
 // ---------- ledger edits (global page) ----------
 
-export async function getLedgerView() {
-  const ledger = await atl.loadLedger();
+export async function getLedgerView(preloaded = null) {
+  const ledger = preloaded || (await atl.loadLedger());
   const t = today();
   return {
     today: t,
@@ -282,6 +282,21 @@ export async function addCustomer({ orgId, name }) {
   return getLedgerView();
 }
 
+// Everything the global page shows on first open, with the ledger loaded once (not once per tab).
+export async function getHome({ isAdmin }) {
+  let ledger;
+  try {
+    ledger = await atl.loadLedger();
+  } catch (e) {
+    if (isNoServiceManagement(e)) return { needsJsm: true, message: e.message };
+    throw e;
+  }
+  const [view, dash, demo] = await Promise.all([getLedgerView(ledger), getDashboard(ledger), getDemoSetup({ isAdmin, ledger })]);
+  return { view, dashboard: dash, demo };
+}
+
+export const isNoServiceManagement = (e) => e?.code === 'NO_JSM';
+
 // ---------- demo data (admins only) ----------
 
 function siteAdapter() {
@@ -302,16 +317,26 @@ function siteAdapter() {
     getIssueProperty: (key, prop) => atl.getIssueProperty(key, prop),
     setIssueProperty: (key, prop, value) => atl.setIssueProperty(key, prop, value),
     closeIssue: (key) => atl.closeIssue(key),
+    // The app may not be allowed to delete organizations; then just take the old one out of the ledger.
+    deleteOrg: async (id) => {
+      try {
+        await atl.deleteOrganization(id);
+      } catch (e) {
+        console.warn(`could not delete old demo organization ${id} (${String(e.message).slice(0, 80)}); removing its ledger record instead`);
+        await atl.deleteLedgerRecord(id);
+      }
+    },
+    renameIssue: (key, summary) => atl.renameIssue(key, summary),
   };
 }
 
-export async function getDemoSetup({ isAdmin }) {
+export async function getDemoSetup({ isAdmin, ledger: preloaded = null }) {
   const settings = await getSettings();
   if (!isAdmin) return { isAdmin: false, settings };
   const [spaces, projects, ledger] = await Promise.all([
     atl.listSpaces().catch(() => []),
     atl.listProjects().catch(() => []),
-    atl.loadLedger(),
+    preloaded || atl.loadLedger(),
   ]);
   return {
     isAdmin: true,
