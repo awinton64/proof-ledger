@@ -48,7 +48,7 @@ To load the fictional demo (12 invented customers, 20 permissions, 8 Confluence 
 SITE=https://your-site.atlassian.net ATL_EMAIL=you@example.com ATL_TOKEN=<api token> node scripts/seed.mjs
 ```
 
-Add `--reset` to remove fix tasks from a previous demo run. The demo vendor "Corvane Analytics" and every customer in it are invented.
+Add `--reset` to close fix tasks from a previous demo run. The demo vendor "Corvane Analytics" and every customer in it are invented.
 
 Demo script: open the Q1 paid social ad copy page and click **Proof check**; open a proof request in Jira; then mark Orrinvale Credit Union churned on the Proof Ledger page and watch three fix tasks appear, one for each page that still names it.
 

@@ -150,10 +150,14 @@ const REQUESTS = [
 // ---------- run ----------
 
 async function resetDemo() {
-  // Remove fix tasks raised by earlier demo runs so the churn story starts clean.
-  const old = await req('GET', `/rest/api/3/search/jql?jql=${encodeURIComponent(`project = ${TASK_PROJECT} AND labels = proof-fix`)}&fields=summary&maxResults=100`);
-  for (const i of old.issues || []) await req('DELETE', `/rest/api/3/issue/${i.key}`);
-  if ((old.issues || []).length) console.log(`removed ${old.issues.length} old fix task(s)`);
+  // Close fix tasks raised by earlier demo runs (moves them to Done) so the churn story starts clean.
+  const old = await req('GET', `/rest/api/3/search/jql?jql=${encodeURIComponent(`project = ${TASK_PROJECT} AND labels = proof-fix AND statusCategory != Done`)}&fields=summary&maxResults=100`);
+  for (const i of old.issues || []) {
+    const tr = await req('GET', `/rest/api/3/issue/${i.key}/transitions`);
+    const done = tr.transitions.find((t) => t.to?.statusCategory?.key === 'done');
+    if (done) await req('POST', `/rest/api/3/issue/${i.key}/transitions`, { transition: { id: done.id } });
+  }
+  if ((old.issues || []).length) console.log(`closed ${old.issues.length} old fix task(s)`);
 }
 
 async function main() {
