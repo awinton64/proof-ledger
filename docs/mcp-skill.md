@@ -1,6 +1,6 @@
 # Skill: check customer proof before naming a customer
 
-Use this with any AI writing tool connected to the Proof Ledger MCP tools.
+Use this with any AI agent that has the Proof Ledger tools: a Rovo Studio agent with the three Proof Ledger tools added (tested), or an AI writing tool connected to the Atlassian MCP server where Proof Ledger is installed (exposed through `rovo:mcp`; not yet tested from an outside client).
 
 Before you write copy that names a customer, quotes a customer, uses a customer's logo, cites a customer outcome, or suggests a customer for a reference call:
 

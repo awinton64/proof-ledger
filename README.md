@@ -18,14 +18,14 @@ B2B marketing and sales teams name customers all the time: logo walls, quotes in
 | Where | What you get |
 |---|---|
 | Jira Service Management | Consent is stored on each **customer organization** (an organization property), so the customer list is the one your support team already keeps. |
-| Jira global page | **Dashboard**: pages scanned and flagged, unconsented or wrong-channel uses, churn fallout, permissions expiring in 30 days, over-asked reference customers. **Customers and permissions**: record, edit, revoke; mark a customer churned. **Quick check**. |
+| Jira global page | **Dashboard**: pages scanned and flagged, unconsented or wrong-channel uses, churn fallout, permissions expiring in 30 days, over-asked reference customers. **Customers and permissions**: add a JSM organization to the ledger (only organizations you add are tracked), record, edit, revoke; mark a customer churned. **Quick check**. **Demo data** (Jira admins): load or reset the fictional demo in one click. |
 | Jira issue panel "Proof request" | Pick customer, use and channel (and the exact wording for quotes). Get **Allowed**, **Needs consent** or **Blocked**, with the reasons. Log reference calls against a 90-day limit. |
 | Confluence byline "Proof check" | Scans the page for customer names, aliases and quoted text, using the page's `channel-*` label (for example `channel-paid-ads`). Flags each unconsented, expired, revoked, churned or wrong-channel use, with a fix. Pages are re-checked automatically when created or updated. |
 | Churn and expiry sweep | When a customer is marked churned (or daily, for expired and revoked permissions), finds every Confluence page that still names them and raises one Jira fix task per page, without duplicates. |
 | Rovo agent "Proof Desk" | Answers "Can we use this customer's quote in a paid ad?" and "Which healthcare customers can sales use for a reference call?" by calling the same rule engine. |
-| MCP tools (`rovo:mcp`) | `check-proof`, `list-referenceable`, `scan-page` for outside AI writing tools, so an AI copywriter can check before it names a customer. |
+| Rovo tools and MCP exposure | The same three actions (`check-proof`, `list-referenceable`, `scan-page`) can be added as tools to any custom agent in Rovo Studio (tested). They are also exposed through the Atlassian MCP server with a `rovo:mcp` module, for outside AI writing tools; a call from an outside MCP client has not been tested yet, because the test organization limits the Atlassian MCP server to trusted domains. |
 
-The verdicts come from rules, not AI. The core app needs no Rovo and makes no LLM calls. Rovo and MCP add a conversational way in, built on the same deterministic engine.
+The verdicts come from rules, not AI. The core app needs no Rovo and makes no LLM calls. Rovo adds a conversational way in, built on the same deterministic engine.
 
 ## Rules
 
@@ -42,13 +42,22 @@ Text matching is exact and normalized (case, punctuation, curly quotes, accents)
 
 Labels the scanner reads on Confluence pages: `channel-website`, `channel-paid-ads`, `channel-social`, `channel-sales-deck`, `channel-case-study`, `channel-press`, `channel-events`, `channel-partner`; optional `asset-case-study`. Pages without a channel label are treated as internal and only reported.
 
-To load the fictional demo (12 invented customers, 20 permissions, 8 Confluence pages, 6 proof requests) into your own test site, you need a JSM project (default key `CUST`), a Jira project for proof requests and fix tasks (default `PROOF`) and a Confluence space (default `MKT`):
+### Demo data
+
+To try the app with fictional data, open **Apps > Proof Ledger > Demo data** as a Jira administrator, choose a Jira project (for proof requests and fix tasks) and a Confluence space (for the demo pages), and click **Load demo data**. It creates 12 invented customers of the invented vendor Corvane Analytics (as JSM organizations), 20 permissions, 8 labeled Confluence pages and 6 proof requests. It takes about a minute.
+
+- Safe to run again: it only creates what is missing and keeps changes you made to demo records.
+- **Reset demo data** restores the demo records and pages and closes fix tasks raised for demo customers.
+- It never changes non-demo data. Demo records are marked (`demo: true` on the ledger record, label `proof-ledger-demo` on pages and issues); a customer, page or issue with a demo name but real data is skipped and reported.
+- To remove the demo later, delete the demo organizations in JSM, the demo pages and the demo issues.
+
+The same loader runs from the command line, for scripted setups (it also creates one synthetic JSM consent request per permission when a service project with key `CUST` exists):
 
 ```
-SITE=https://your-site.atlassian.net ATL_EMAIL=you@example.com ATL_TOKEN=<api token> node scripts/seed.mjs
+SITE=https://your-site.atlassian.net ATL_EMAIL=you@example.com ATL_TOKEN=<api token> node scripts/seed.mjs [--reset]
 ```
 
-Add `--reset` to close fix tasks from a previous demo run. The demo vendor "Corvane Analytics" and every customer in it are invented.
+Optional: `JSM_PROJECT`, `TASK_PROJECT` (default `PROOF`), `SPACE_KEY` (default `MKT`).
 
 Demo script: open the Q1 paid social ad copy page and click **Proof check**; open a proof request in Jira; then mark Orrinvale Credit Union churned on the Proof Ledger page and watch three fix tasks appear, one for each page that still names it.
 
@@ -56,11 +65,11 @@ Demo script: open the Q1 paid social ad copy page and click **Proof check**; ope
 
 ```
 npm install
-npm test                 # permission engine tests (node:test)
+npm test                 # engine and demo-data tests (node:test)
 forge deploy && forge install
 ```
 
-Requires Node 24 and Forge CLI 15. Source: `src/engine.js` (pure rules, tested), `src/service.js` (business logic), `src/atlassian.js` (REST access), `src/index.js` (resolvers, triggers, Rovo actions), `src/frontend/` (UI Kit).
+Requires Node 24 and Forge CLI 15. Source: `src/engine.js` (pure rules, tested), `src/service.js` (business logic), `src/atlassian.js` (REST access), `src/index.js` (resolvers, triggers, Rovo actions), `src/demo.js` (fictional demo data and the load/reset rules, shared with `scripts/seed.mjs`), `src/frontend/` (UI Kit).
 
 ## Data and privacy
 

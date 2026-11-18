@@ -366,3 +366,27 @@ export function referenceable({ customers, permissions, uses = [], assetType, ch
     .filter((x) => x.v.verdict === VERDICT.ALLOWED)
     .map((x) => ({ customerId: x.customer.id, name: x.customer.name, segment: x.customer.segment || null, expiresOn: x.v.permission?.expiresOn || null, warnings: x.v.warnings }));
 }
+
+// ---------- ledger membership ----------
+
+// orgs: JSM organizations [{ id, name }]; records: the raw proof-ledger property per org (null when the
+// org has none). Organizations without a record are not part of the ledger and are listed as untracked.
+export function splitLedger(orgs, records) {
+  const customers = [];
+  const permissions = [];
+  const uses = [];
+  const untracked = [];
+  orgs.forEach((o, i) => {
+    const r = records[i];
+    const id = String(o.id);
+    if (!r || typeof r !== 'object') {
+      untracked.push({ id, name: o.name });
+      return;
+    }
+    customers.push({ id, name: o.name, aliases: r.aliases || [], status: r.status || 'active', churnedAt: r.churnedAt || null, segment: r.segment || '', owner: r.owner || '', renewalAtRisk: !!r.renewalAtRisk, doNotContact: !!r.doNotContact, demo: r.demo === true });
+    for (const p of r.permissions || []) permissions.push({ ...p, customerId: id });
+    for (const u of r.uses || []) uses.push({ ...u, customerId: id });
+  });
+  const byName = (a, b) => a.name.localeCompare(b.name);
+  return { customers: customers.sort(byName), permissions, uses, untracked: untracked.sort(byName) };
+}

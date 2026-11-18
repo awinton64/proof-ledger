@@ -2,7 +2,7 @@
 // organization property, so the Jira and Confluence installations of this app (which have
 // separate Forge storage) read and write the same records, and the data never leaves the site.
 import api, { route } from '@forge/api';
-import { htmlToText } from './engine';
+import { htmlToText, splitLedger } from './engine';
 
 export const PROP = 'proof-ledger';
 const EMPTY = { aliases: [], status: 'active', segment: '', owner: '', permissions: [], uses: [] };
@@ -42,33 +42,31 @@ export async function listOrganizations() {
   return out;
 }
 
-export async function getLedgerRecord(orgId) {
+// The raw record, or null when the organization is not in the ledger (no property yet).
+export async function getRawLedgerRecord(orgId) {
   try {
     const p = await jira(route`/rest/servicedeskapi/organization/${orgId}/property/${PROP}`);
-    return { ...EMPTY, ...(p?.value || {}) };
+    return p?.value || null;
   } catch (e) {
-    if (String(e.message).includes('404')) return { ...EMPTY };
+    if (String(e.message).includes('404')) return null;
     throw e;
   }
+}
+
+export async function getLedgerRecord(orgId) {
+  return { ...EMPTY, ...((await getRawLedgerRecord(orgId)) || {}) };
 }
 
 export async function putLedgerRecord(orgId, record) {
   await jira(route`/rest/servicedeskapi/organization/${orgId}/property/${PROP}`, { method: 'PUT', body: JSON.stringify(record) });
 }
 
+// Only organizations that carry a Proof Ledger record are customers of the ledger. Other JSM
+// organizations on the site are returned separately as `untracked`, so they can be added.
 export async function loadLedger() {
   const orgs = await listOrganizations();
-  const records = await Promise.all(orgs.map((o) => getLedgerRecord(o.id)));
-  const customers = [];
-  const permissions = [];
-  const uses = [];
-  orgs.forEach((o, i) => {
-    const r = records[i];
-    customers.push({ id: String(o.id), name: o.name, aliases: r.aliases || [], status: r.status || 'active', churnedAt: r.churnedAt || null, segment: r.segment || '', owner: r.owner || '', renewalAtRisk: !!r.renewalAtRisk, doNotContact: !!r.doNotContact, tracked: (r.permissions || []).length > 0 });
-    for (const p of r.permissions || []) permissions.push({ ...p, customerId: String(o.id) });
-    for (const u of r.uses || []) uses.push({ ...u, customerId: String(o.id) });
-  });
-  return { customers, permissions, uses };
+  const records = await Promise.all(orgs.map((o) => getRawLedgerRecord(o.id)));
+  return splitLedger(orgs, records);
 }
 
 export async function updateLedgerRecord(orgId, fn) {
@@ -160,4 +158,71 @@ export async function createTask({ projectKey, summary, description, labels }) {
     },
   };
   return jira(route`/rest/api/3/issue`, { method: 'POST', body: JSON.stringify(body) });
+}
+
+// ---------- demo data and setup helpers ----------
+
+export async function listSpaces() {
+  const res = await confluence(route`/wiki/api/v2/spaces?limit=100&type=global&status=current`);
+  return (res.results || []).map((s) => ({ id: String(s.id), key: s.key, name: s.name }));
+}
+
+export async function findSpace(key) {
+  const res = await confluence(route`/wiki/api/v2/spaces?keys=${key}`);
+  const s = res.results?.[0];
+  return s ? { id: String(s.id), key: s.key } : null;
+}
+
+export async function findPageByTitle(spaceId, title) {
+  const res = await confluence(route`/wiki/api/v2/spaces/${spaceId}/pages?title=${title}&body-format=storage&status=current`);
+  const page = res.results?.[0];
+  if (!page) return null;
+  const labels = await confluence(route`/wiki/api/v2/pages/${page.id}/labels?limit=100`);
+  return { id: String(page.id), body: page.body?.storage?.value || '', labels: (labels.results || []).map((l) => l.name), version: page.version?.number };
+}
+
+export async function createPage(spaceId, title, body) {
+  const res = await confluence(route`/wiki/api/v2/pages`, { method: 'POST', body: JSON.stringify({ spaceId, status: 'current', title, body: { representation: 'storage', value: body } }) });
+  return String(res.id);
+}
+
+export async function updatePage(id, title, body, version) {
+  await confluence(route`/wiki/api/v2/pages/${id}`, { method: 'PUT', body: JSON.stringify({ id, status: 'current', title, body: { representation: 'storage', value: body }, version: { number: (version || 1) + 1, message: 'Proof Ledger demo data' } }) });
+}
+
+export async function addPageLabels(id, labels) {
+  await confluence(route`/wiki/rest/api/content/${id}/label`, { method: 'POST', body: JSON.stringify(labels.map((name) => ({ prefix: 'global', name }))) });
+}
+
+export async function listProjects() {
+  const res = await jira(route`/rest/api/3/project/search?maxResults=100&orderBy=key`);
+  return (res.values || []).map((p) => ({ key: p.key, name: p.name, type: p.projectTypeKey }));
+}
+
+export async function createIssue(projectKey, summary, labels) {
+  const meta = await jira(route`/rest/api/3/issue/createmeta/${projectKey}/issuetypes`);
+  const types = meta.issueTypes || meta.values || [];
+  const type = types.find((t) => t.name === 'Task') || types.find((t) => !t.subtask) || types[0];
+  const res = await jira(route`/rest/api/3/issue`, { method: 'POST', body: JSON.stringify({ fields: { project: { key: projectKey }, issuetype: { id: type.id }, summary, labels } }) });
+  return res.key;
+}
+
+export async function addIssueLabels(key, labels) {
+  await jira(route`/rest/api/3/issue/${key}`, { method: 'PUT', body: JSON.stringify({ update: { labels: labels.map((l) => ({ add: l })) } }) });
+}
+
+export async function closeIssue(key) {
+  const tr = await jira(route`/rest/api/3/issue/${key}/transitions`);
+  const done = (tr.transitions || []).find((t) => t.to?.statusCategory?.key === 'done');
+  if (!done) return false;
+  await jira(route`/rest/api/3/issue/${key}/transitions`, { method: 'POST', body: JSON.stringify({ transition: { id: done.id } }) });
+  return true;
+}
+
+// Is the signed-in user a Jira administrator? Checked as the user, not as the app.
+export async function currentUserIsAdmin() {
+  const res = await api.asUser().requestJira(route`/rest/api/3/mypermissions?permissions=ADMINISTER`, { headers: { Accept: 'application/json' } });
+  if (!res.ok) return false;
+  const body = await res.json();
+  return !!body?.permissions?.ADMINISTER?.havePermission;
 }

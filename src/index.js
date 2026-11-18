@@ -2,6 +2,7 @@ import { Queue } from '@forge/events';
 import { kvs } from '@forge/kvs';
 import Resolver from '@forge/resolver';
 import * as svc from './service';
+import * as atl from './atlassian';
 
 const resolver = new Resolver();
 const wrap = (fn) => async (req) => {
@@ -24,6 +25,8 @@ resolver.define('scanAll', wrap(() => svc.scanAll()));
 resolver.define('sweep', wrap(() => svc.sweep({ reason: 'manual' })));
 resolver.define('saveSettings', wrap(({ payload }) => svc.saveSettings(payload)));
 resolver.define('check', wrap(({ payload }) => svc.checkProof(payload)));
+resolver.define('addCustomer', wrap(({ payload }) => svc.addCustomer(payload)));
+resolver.define('demoSetup', wrap(async () => svc.getDemoSetup({ isAdmin: await atl.currentUserIsAdmin() })));
 
 // Jira issue panel
 resolver.define('getRequest', wrap(({ context }) => svc.getRequest(context.extension.issue.key)));
@@ -77,6 +80,7 @@ export async function scanPageAction(payload) {
 const jobs = new Queue({ key: 'proof-jobs' });
 
 async function startJob(kind, args = {}) {
+  if (kind === 'demo' && !(await atl.currentUserIsAdmin())) throw new Error('Only Jira administrators can load or reset demo data.');
   const id = `job-${Date.now().toString(36)}`;
   await kvs.set(`job:${id}`, { id, kind, state: 'running', startedAt: new Date().toISOString() });
   await jobs.push({ body: { id, kind, args } });
@@ -92,6 +96,7 @@ export async function runJob(event) {
     let result;
     if (kind === 'scanAll') result = { pages: (await svc.scanAll()).length };
     else if (kind === 'sweep') result = await svc.sweep({ reason: args.reason || 'manual' });
+    else if (kind === 'demo') result = await svc.runDemo({ reset: !!args.reset, taskProject: args.taskProject, spaceKey: args.spaceKey });
     else if (kind === 'churn') result = await svc.setCustomerStatus({ customerId: args.customerId, status: args.status, runSweep: true }).then((r) => r.sweep);
     else throw new Error(`Unknown job ${kind}`);
     await kvs.set(`job:${id}`, { id, kind, state: 'done', finishedAt: new Date().toISOString(), result });

@@ -39,6 +39,7 @@ const Dashboard = ({ version, onChanged }) => {
   if (error && !d) return <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage>;
   if (!d) return <Spinner />;
   const t = d.totals;
+  const empty = t.customers === 0;
   const health = [
     { status: 'Clear or warning only', count: Math.max(0, t.pagesScanned - t.pagesFlagged) },
     { status: 'Flagged', count: t.pagesFlagged },
@@ -52,6 +53,11 @@ const Dashboard = ({ version, onChanged }) => {
       </Inline>
       {msg && <SectionMessage appearance="information"><Text>{msg}</Text></SectionMessage>}
       {error && <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage>}
+      {empty && (
+        <SectionMessage appearance="discovery" title="No customers in the ledger yet">
+          <Text>Add a customer on the Customers and permissions tab, or, if you are a Jira admin, open the Demo data tab and click Load demo data to try Proof Ledger with invented customers and pages.</Text>
+        </SectionMessage>
+      )}
       <Inline space="space.150" shouldWrap>
         <Stat label="Customers in ledger" value={t.customers} />
         <Stat label="Permissions on record" value={t.permissions} />
@@ -122,6 +128,8 @@ const Ledger = ({ version, onChanged }) => {
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [addOrg, setAddOrg] = useState(null);
+  const [newName, setNewName] = useState('');
   useEffect(() => { call('ledger').then(setV).catch((e) => setError(e.message)); }, [version]);
   const act = (name, payload, after) => {
     setBusy(true);
@@ -159,6 +167,19 @@ const Ledger = ({ version, onChanged }) => {
             : <Button spacing="compact" appearance="warning" isDisabled={busy} onClick={() => act('setCustomerStatus', { customerId: c.id, status: 'churned' })}>Mark churned</Button> },
         ] }))}
       />
+
+      {v.customers.length === 0 && <Text>No customers in the ledger yet. Add one below.</Text>}
+
+      <Heading as="h4">Add a customer to the ledger</Heading>
+      <Text>{`Only Jira Service Management organizations you add here are part of the ledger.${v.untracked.length ? ` ${v.untracked.length} other organization(s) on this site are not tracked.` : ''}`}</Text>
+      <Inline space="space.150" alignBlock="end" grow="fill">
+        <Stack space="space.050" grow="fill"><Label labelFor="add-org">Existing organization</Label>
+          <Select inputId="add-org" isClearable options={v.untracked.map((o) => ({ value: o.id, label: o.name }))} value={addOrg} onChange={(o) => setAddOrg(o || null)} placeholder={v.untracked.length ? 'Choose an organization' : 'All organizations are tracked'} /></Stack>
+        <Button isDisabled={busy || !addOrg} onClick={() => act('addCustomer', { orgId: addOrg.value }, () => setAddOrg(null))}>Add organization</Button>
+        <Stack space="space.050" grow="fill"><Label labelFor="add-new">Or create a new organization</Label>
+          <Textfield id="add-new" value={newName} placeholder="Customer name" onChange={(e) => setNewName(e.target.value)} /></Stack>
+        <Button isDisabled={busy || !newName.trim()} onClick={() => act('addCustomer', { name: newName }, () => setNewName(''))}>Create and add</Button>
+      </Inline>
 
       <Heading as="h3">Permissions</Heading>
       <DynamicTable
@@ -241,6 +262,62 @@ const Check = () => {
   );
 };
 
+// ---------------- Demo data (admins) ----------------
+
+const Demo = ({ onChanged }) => {
+  const [s, setS] = useState(null);
+  const [form, setForm] = useState({ taskProject: '', spaceKey: '' });
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState(null);
+  const [error, setError] = useState(null);
+  const load = () => call('demoSetup').then((r) => {
+    setS(r);
+    setForm({ taskProject: r.settings.taskProject || '', spaceKey: r.settings.demoSpaceKey || '' });
+  }).catch((e) => setError(e.message));
+  useEffect(() => { load(); }, []);
+  if (!s) return error ? <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage> : <Spinner />;
+  if (!s.isAdmin) return <SectionMessage appearance="information"><Text>Only Jira administrators can load or reset the demo data.</Text></SectionMessage>;
+  const projects = s.projects.map((p) => ({ value: p.key, label: `${p.name} (${p.key})` }));
+  const spaces = s.spaces.map((x) => ({ value: x.key, label: `${x.name} (${x.key})` }));
+  const ready = form.taskProject && form.spaceKey && projects.some((o) => o.value === form.taskProject) && spaces.some((o) => o.value === form.spaceKey);
+  const go = (reset) => {
+    setBusy(reset ? 'reset' : 'load');
+    setError(null);
+    setMsg(null);
+    runJob('demo', { reset, taskProject: form.taskProject, spaceKey: form.spaceKey }, { maxMs: 600000 })
+      .then((r) => { setMsg({ text: `${reset ? 'Demo reset' : 'Demo loaded'}: ${r.message}`, skipped: r.skipped || [] }); return load(); })
+      .catch((e) => setError(e.message))
+      .finally(() => { setBusy(''); onChanged && onChanged(); });
+  };
+  return (
+    <Stack space="space.200">
+      <Text>Load a small, entirely fictional demo so you can try Proof Ledger right away: 12 invented customers of the invented vendor Corvane Analytics (as Jira Service Management organizations), 20 consent records, 8 marketing pages in the Confluence space you choose, and 6 proof requests in the Jira project you choose.</Text>
+      <Text>Safe to run more than once. It only creates or changes demo records (marked as demo), never your own customers, pages or issues. Reset restores the demo to its starting state and closes fix tasks raised for demo customers.</Text>
+      <Text>{`Demo customers in the ledger: ${s.demoCustomers} of ${s.demoTotal}.`}</Text>
+      <Inline space="space.150" grow="fill">
+        <Stack space="space.050" grow="fill"><Label labelFor="d-p">Jira project for proof requests and fix tasks</Label>
+          <Select inputId="d-p" options={projects} value={projects.find((o) => o.value === form.taskProject) || null} onChange={(o) => setForm({ ...form, taskProject: o?.value || '' })} /></Stack>
+        <Stack space="space.050" grow="fill"><Label labelFor="d-s">Confluence space for demo pages</Label>
+          <Select inputId="d-s" options={spaces} value={spaces.find((o) => o.value === form.spaceKey) || null} onChange={(o) => setForm({ ...form, spaceKey: o?.value || '' })} /></Stack>
+      </Inline>
+      <Inline space="space.100" alignBlock="center">
+        <Button appearance="primary" isDisabled={!!busy || !ready} onClick={() => go(false)}>{busy === 'load' ? 'Loading demo data...' : 'Load demo data'}</Button>
+        <Button isDisabled={!!busy || !ready || s.demoCustomers === 0} onClick={() => go(true)}>{busy === 'reset' ? 'Resetting...' : 'Reset demo data'}</Button>
+        {busy && <Text>This takes about a minute.</Text>}
+      </Inline>
+      {msg && (
+        <SectionMessage appearance="success">
+          <Stack space="space.050">
+            <Text>{msg.text}</Text>
+            {msg.skipped.map((x, i) => <Text key={`sk${i}`}>{`Skipped: ${x}`}</Text>)}
+          </Stack>
+        </SectionMessage>
+      )}
+      {error && <SectionMessage appearance="error"><Text>{error}</Text></SectionMessage>}
+    </Stack>
+  );
+};
+
 const App = () => {
   const [version, setVersion] = useState(0);
   const bump = () => setVersion((x) => x + 1);
@@ -252,10 +329,12 @@ const App = () => {
           <Tab>Dashboard</Tab>
           <Tab>Customers and permissions</Tab>
           <Tab>Quick check</Tab>
+          <Tab>Demo data</Tab>
         </TabList>
         <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Dashboard version={version} onChanged={bump} /></Box></TabPanel>
         <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Ledger version={version} onChanged={bump} /></Box></TabPanel>
         <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Check /></Box></TabPanel>
+        <TabPanel><Box xcss={xcss({ paddingTop: 'space.200', width: '100%' })}><Demo onChanged={bump} /></Box></TabPanel>
       </Tabs>
     </Stack>
   );

@@ -2,10 +2,11 @@
 import { kvs } from '@forge/kvs';
 import { evaluate, scanPage, dashboard, referenceable, ASSET_TYPES, CHANNELS, isoDay, permissionState } from './engine';
 import * as atl from './atlassian';
+import { applyDemo, summarizeDemoReport, DEMO_LABEL, DEMO_CUSTOMERS } from './demo';
 
 export const REQUEST_PROP = 'proof-request';
 const SETTINGS_KEY = 'settings';
-const DEFAULT_SETTINGS = { taskProject: 'PROOF' };
+const DEFAULT_SETTINGS = { taskProject: 'PROOF', demoSpaceKey: 'MKT' };
 
 export const today = () => isoDay(new Date());
 
@@ -156,7 +157,7 @@ export async function sweep({ reason = 'manual', onlyCustomerId = null } = {}) {
       const issue = await atl.createTask({
         projectKey: settings.taskProject,
         summary: `Fix customer proof: ${why} on "${scan.title}"`,
-        labels: ['proof-ledger', 'proof-fix', label],
+        labels: ['proof-ledger', 'proof-fix', label, ...(c.demo ? [DEMO_LABEL] : [])],
         description: [
           `Proof Ledger found ${hits.length} use(s) of ${c.name} on the Confluence page "${scan.title}" that are no longer allowed (${scan.channel ? CHANNELS[scan.channel] : 'unlabeled'} channel).`,
           scan.url ? `Page: ${scan.url}` : '',
@@ -215,6 +216,7 @@ export async function getLedgerView() {
   return {
     today: t,
     customers: ledger.customers,
+    untracked: ledger.untracked,
     permissions: ledger.permissions.map((p) => ({ ...p, state: permissionState(p, t), customer: ledger.customers.find((c) => c.id === p.customerId)?.name })),
     uses: ledger.uses,
     assetTypes: ASSET_TYPES,
@@ -263,4 +265,71 @@ export async function updateCustomer({ customerId, aliases, segment, owner, rene
     ...(doNotContact !== undefined ? { doNotContact } : {}),
   }));
   return getLedgerView();
+}
+
+// Put a JSM organization into the ledger (an empty record), or create a new organization first.
+export async function addCustomer({ orgId, name }) {
+  let id = orgId ? String(orgId) : null;
+  if (!id) {
+    const clean = String(name || '').trim();
+    if (!clean) throw new Error('Enter a customer name or choose an organization.');
+    const ledger = await atl.loadLedger();
+    const match = [...ledger.customers, ...ledger.untracked].find((o) => o.name.toLowerCase() === clean.toLowerCase());
+    id = match ? match.id : String((await atl.createOrganization(clean)).id);
+  }
+  const raw = await atl.getRawLedgerRecord(id);
+  if (!raw) await atl.putLedgerRecord(id, { aliases: [], status: 'active', segment: '', owner: '', permissions: [], uses: [] });
+  return getLedgerView();
+}
+
+// ---------- demo data (admins only) ----------
+
+function siteAdapter() {
+  const issue = (i) => ({ key: i.key, summary: i.fields?.summary, labels: i.fields?.labels || [] });
+  return {
+    listOrgs: () => atl.listOrganizations(),
+    getRecord: (id) => atl.getRawLedgerRecord(id),
+    putRecord: (id, r) => atl.putLedgerRecord(id, r),
+    createOrg: (name) => atl.createOrganization(name),
+    findSpace: (key) => atl.findSpace(key),
+    findPage: (spaceId, title) => atl.findPageByTitle(spaceId, title),
+    createPage: (spaceId, title, body) => atl.createPage(spaceId, title, body),
+    updatePage: (id, title, body, version) => atl.updatePage(id, title, body, version),
+    addLabels: (id, labels) => atl.addPageLabels(id, labels),
+    searchIssues: async (jql) => (await atl.searchIssues(jql, 'summary,labels')).map(issue),
+    createIssue: (project, summary, labels) => atl.createIssue(project, summary, labels),
+    addIssueLabels: (key, labels) => atl.addIssueLabels(key, labels),
+    getIssueProperty: (key, prop) => atl.getIssueProperty(key, prop),
+    setIssueProperty: (key, prop, value) => atl.setIssueProperty(key, prop, value),
+    closeIssue: (key) => atl.closeIssue(key),
+  };
+}
+
+export async function getDemoSetup({ isAdmin }) {
+  const settings = await getSettings();
+  if (!isAdmin) return { isAdmin: false, settings };
+  const [spaces, projects, ledger] = await Promise.all([
+    atl.listSpaces().catch(() => []),
+    atl.listProjects().catch(() => []),
+    atl.loadLedger(),
+  ]);
+  return {
+    isAdmin: true,
+    settings,
+    spaces,
+    projects: projects.filter((p) => p.type !== 'service_desk'),
+    demoCustomers: ledger.customers.filter((c) => c.demo).length,
+    demoTotal: DEMO_CUSTOMERS.length,
+  };
+}
+
+export async function runDemo({ reset = false, taskProject, spaceKey } = {}) {
+  const settings = await saveSettings({ ...(taskProject ? { taskProject } : {}), ...(spaceKey ? { demoSpaceKey: spaceKey } : {}) });
+  const report = await applyDemo(siteAdapter(), { today: today(), taskProject: settings.taskProject, spaceKey: settings.demoSpaceKey, reset, log: (m) => console.log(`demo ${reset ? 'reset' : 'load'}: ${m}`) });
+  if (reset) {
+    // Cached scan and sweep results describe the old state; clear them so the dashboard starts fresh.
+    await kvs.delete('lastScan');
+    await kvs.delete('lastSweep');
+  }
+  return { ...report, message: summarizeDemoReport(report, reset) };
 }
